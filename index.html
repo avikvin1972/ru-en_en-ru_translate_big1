@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Перевод RU → EN (голосом)</title>
+<style>
+:root{
+  --bg:#f5f6f8; --card:#fff; --text:#1a1a1a; --muted:#6b7280;
+  --accent:#4f46e5; --good:#16a34a; --bad:#dc2626; --border:#e5e7eb;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --bg:#15161a; --card:#1f2024; --text:#f1f1f1; --muted:#9ca3af; --border:#33343a; }
+}
+:root[data-theme="dark"]{ --bg:#15161a; --card:#1f2024; --text:#f1f1f1; --muted:#9ca3af; --border:#33343a; }
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+  display:flex; justify-content:center; padding:20px 14px;
+}
+.card{ background:var(--card); border:1px solid var(--border); border-radius:16px; padding:20px; width:100%; max-width:480px; }
+h1{font-size:19px; margin:0 0 4px;}
+.sub{color:var(--muted); font-size:13px; margin:0 0 16px;}
+.tabs{display:flex; gap:6px; margin-bottom:16px;}
+.tab{
+  flex:1; padding:9px; text-align:center; font-size:13px; font-weight:600; border-radius:9px;
+  border:1px solid var(--border); background:var(--bg); color:var(--muted); cursor:pointer;
+}
+.tab.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+.view{display:none;}
+.view.active{display:block;}
+
+.label{font-size:12px; color:var(--muted); margin-bottom:6px;}
+.ru-sentence{
+  font-size:18px; font-weight:600; background:var(--bg); border:1px solid var(--border);
+  border-radius:10px; padding:14px; margin-bottom:16px; line-height:1.4;
+}
+#ruText{
+  font-size:45px; line-height:1.25;
+}
+.mic-wrap{ display:flex; justify-content:center; margin:18px 0; }
+.mic-btn{
+  width:84px; height:84px; border-radius:50%; border:none; background:var(--accent); color:#fff;
+  font-size:32px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+}
+.mic-btn.listening{ background:var(--bad); animation:pulse 1s infinite; }
+@keyframes pulse{ 0%{transform:scale(1);} 50%{transform:scale(1.08);} 100%{transform:scale(1);} }
+.status{ text-align:center; font-size:13px; color:var(--muted); min-height:18px; margin-bottom:8px; }
+.heard{ background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-size:14px; margin-bottom:12px; display:none; }
+.heard.show{display:block;}
+.feedback{ margin-top:6px; padding:12px; border-radius:10px; font-size:14px; display:none; }
+.feedback.show{display:block;}
+.feedback.good{background:rgba(22,163,74,0.12); color:var(--good);}
+.feedback.bad{background:rgba(220,38,38,0.12); color:var(--bad);}
+.correct-answer{margin-top:6px; font-weight:600; white-space:pre-line;}
+.row{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;}
+button.secondary{
+  flex:1; min-width:100px; padding:11px; font-size:14px; font-weight:600;
+  border:none; border-radius:10px; cursor:pointer; background:var(--border); color:var(--text);
+}
+.progress{font-size:12px; color:var(--muted); margin-top:14px; text-align:right;}
+.unsupported{ color:var(--bad); font-size:13px; text-align:center; }
+
+input[type=text], textarea{
+  width:100%; padding:11px; font-size:14px; border-radius:9px;
+  border:1px solid var(--border); background:var(--bg); color:var(--text); margin-bottom:8px;
+  font-family:inherit;
+}
+textarea{resize:vertical; min-height:70px;}
+.hint{font-size:11px; color:var(--muted); margin:-4px 0 10px;}
+.btn-primary{
+  width:100%; padding:12px; font-size:14px; font-weight:600; border:none;
+  border-radius:10px; cursor:pointer; background:var(--accent); color:#fff; margin-bottom:16px;
+}
+.list-item{
+  border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin-bottom:8px;
+  font-size:13px;
+}
+.list-item .ru-part{font-weight:600; margin-bottom:6px; display:flex; justify-content:space-between; gap:8px;}
+.variant-chip{
+  display:inline-flex; align-items:center; gap:4px; background:var(--bg); border:1px solid var(--border);
+  border-radius:20px; padding:4px 6px 4px 10px; font-size:12px; margin:0 6px 6px 0; color:var(--muted);
+}
+.variant-chip button{
+  border:none; background:none; color:var(--bad); font-size:13px; cursor:pointer; padding:0 2px; line-height:1;
+}
+.add-variant-row{display:flex; gap:6px; margin-top:4px;}
+.add-variant-row input{margin-bottom:0; flex:1; padding:8px; font-size:12px;}
+.add-variant-row button{
+  border:none; border-radius:8px; background:var(--accent); color:#fff; font-size:12px;
+  padding:0 12px; cursor:pointer;
+}
+.del-btn{
+  border:none; background:none; color:var(--bad); font-size:16px; cursor:pointer; padding:2px 4px; flex-shrink:0;
+}
+.section-divider{border:none; border-top:1px solid var(--border); margin:18px 0;}
+.bulk-status{font-size:12px; color:var(--muted); margin:-4px 0 10px; min-height:16px;}
+.note-box{
+  font-size:12px; color:var(--muted); background:var(--bg); border:1px solid var(--border);
+  border-radius:9px; padding:10px 12px; margin-bottom:14px; line-height:1.4;
+}
+.empty-note{color:var(--muted); font-size:13px; text-align:center; padding:12px 0;}
+
+.summary-row{
+  display:flex; justify-content:space-between; gap:8px; align-items:flex-start;
+  border:1px solid var(--border); border-radius:9px; padding:9px 11px; margin-bottom:6px; font-size:13px;
+}
+.summary-row .sr-icon{flex-shrink:0; font-size:15px;}
+.summary-row .sr-body{flex:1;}
+.summary-row .sr-ru{font-weight:600;}
+.summary-row .sr-detail{color:var(--muted); font-size:12px; margin-top:2px;}
+
+.settings-bar{
+  border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:16px; background:var(--bg);
+}
+.settings-bar select{
+  padding:10px; font-size:13px; border-radius:9px; border:1px solid var(--border);
+  background:var(--card); color:var(--text); flex:1;
+}
+.attempts-info{ text-align:center; font-size:12px; color:var(--muted); margin-bottom:10px; min-height:16px; }
+button.secondary:disabled{ opacity:.45; cursor:not-allowed; }
+</style>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+</head>
+<body>
+<div class="card">
+  <h1 id="appTitle">🇷🇺 → 🇬🇧 Скажи перевод</h1>
+  <p class="sub" id="appSub">Прочитай предложение и произнеси его перевод на английском вслух</p>
+  <div class="hint" id="dbStatus" style="text-align:center; margin-bottom:12px;">Подключение к базе...</div>
+
+  <div class="settings-bar">
+    <div class="label">Направление перевода</div>
+    <select id="directionSelect" style="width:100%;">
+      <option value="ru-en">🇷🇺 Русский → 🇬🇧 English</option>
+      <option value="en-ru">🇬🇧 English → 🇷🇺 Русский</option>
+    </select>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" id="tabPractice">Тренировка</div>
+    <div class="tab" id="tabManage">Редактировать</div>
+  </div>
+
+  <!-- PRACTICE VIEW -->
+  <div class="view active" id="viewPractice">
+
+    <div class="settings-bar">
+      <div class="label">Попыток на перевод (до первой удачной)</div>
+      <div class="row" style="margin-top:0;">
+        <select id="attemptsSelect">
+          <option value="1">1 попытка</option>
+          <option value="2">2 попытки</option>
+          <option value="3" selected>3 попытки</option>
+          <option value="5">5 попыток</option>
+          <option value="0">Без ограничений</option>
+        </select>
+        <button class="secondary" id="startBtn">▶ Начать / перезапустить тест</button>
+      </div>
+    </div>
+
+    <div id="practiceContent" style="display:none;">
+      <div class="label" id="promptLabel">Предложение на русском:</div>
+      <div class="ru-sentence" id="ruText"></div>
+
+      <div class="mic-wrap">
+        <button class="mic-btn" id="micBtn">🎤</button>
+      </div>
+      <div class="status" id="status">Нажми на микрофон и произнеси перевод</div>
+      <div class="attempts-info" id="attemptsInfo"></div>
+
+      <div class="heard" id="heard"></div>
+
+      <div class="feedback" id="feedback">
+        <div id="feedbackText"></div>
+        <div class="correct-answer" id="correctAnswer"></div>
+      </div>
+
+      <div class="row">
+        <button class="secondary" id="replayBtn">🔊 Как правильно</button>
+        <button class="secondary" id="nextBtn">Следующее →</button>
+      </div>
+
+      <div class="progress" id="progress"></div>
+    </div>
+
+    <div id="summaryContent" style="display:none;">
+      <div class="label">Итог тренировки</div>
+      <div class="ru-sentence" id="summaryScore"></div>
+      <div id="summaryList"></div>
+      <button class="btn-primary" id="restartBtn" style="margin-top:12px;">🔁 Начать заново (новые 10)</button>
+    </div>
+
+  </div>
+
+  <!-- MANAGE VIEW -->
+  <div class="view" id="viewManage">
+
+    <div id="managePasswordGate">
+      <div class="label">Введи пароль для редактирования</div>
+      <input type="password" id="managePasswordInput" placeholder="Пароль" autocomplete="current-password">
+      <div class="hint" id="managePasswordError" style="color:var(--bad); display:none;">Неверный пароль.</div>
+      <button class="btn-primary" id="managePasswordSubmit">🔓 Войти</button>
+    </div>
+
+    <div id="manageContent" style="display:none;">
+
+      <div class="note-box">
+        <div class="label" style="margin-bottom:8px;">Сменить пароль редактирования</div>
+        <input type="password" id="changePassOld" placeholder="Текущий пароль">
+        <input type="password" id="changePassNew" placeholder="Новый пароль">
+        <button class="secondary" id="changePassBtn" style="width:100%;">Сменить пароль</button>
+        <div class="hint" id="changePassStatus" style="margin:8px 0 0;"></div>
+      </div>
+
+      <hr class="section-divider">
+
+      <div class="label">Добавить сразу несколько предложений (до 10)</div>
+      <textarea id="bulkRu" placeholder="Каждое предложение с новой строки, например:&#10;Я иду домой.&#10;Который час?&#10;Мне нравится этот город."></textarea>
+      <div class="hint" id="bulkHint">Перевод на английский подберётся автоматически — потом его можно проверить и дополнить вариантами.</div>
+      <button class="btn-primary" id="bulkAddBtn">⚡ Перевести и добавить</button>
+      <div class="bulk-status" id="bulkStatus"></div>
+
+      <div class="note-box">Автоперевод работает через бесплатный онлайн-сервис, поэтому нужен интернет. Для длинных или сложных фраз перевод может быть неточным — проверь и подправь его после добавления.</div>
+
+      <hr class="section-divider">
+
+      <div class="label" id="pairSrcLabel">Предложения на русском (по одному в строке)</div>
+      <textarea id="pairSrc" placeholder="Каждое предложение с новой строки"></textarea>
+
+      <div class="label" id="pairTgtLabel">Перевод на английский (по одному в строке, в том же порядке)</div>
+      <textarea id="pairTgt" placeholder="Перевод для каждой строки выше, в том же порядке"></textarea>
+      <div class="hint">Количество строк в обоих полях должно совпадать (пустые строки игнорируются). После добавления перевод можно отредактировать и дописать к нему дополнительные варианты — в списке ниже.</div>
+
+      <button class="btn-primary" id="pairAddBtn">+ Добавить пары предложений</button>
+      <div class="bulk-status" id="pairAddStatus"></div>
+
+      <hr class="section-divider">
+
+      <div class="label" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+        <span>Твои добавленные предложения:</span>
+        <button class="secondary" id="deleteAllBtn" style="padding:4px 10px; font-size:12px; white-space:nowrap;">🗑 Удалить всё</button>
+      </div>
+      <div class="hint">Нажми на вариант перевода, чтобы отредактировать его.</div>
+      <div id="customList"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const builtIn = [];
+
+const STORAGE_KEYS = { 'ru-en': 'ruEnCustomSentences', 'en-ru': 'enRuCustomSentences' };
+const DIRECTION_KEY = 'translationDirection';
+const PASSWORD_KEY = 'ruEnEditPassword';
+const DEFAULT_PASSWORD = '1234';
+
+const LANG_INFO = {
+  'ru-en': {
+    titleEmoji: '🇷🇺 → 🇬🇧',
+    srcName: 'русском', tgtName: 'английском',
+    srcLangCode: 'ru', tgtLangCode: 'en',
+    recogLang: 'en-US', synthLang: 'en-US',
+    bulkPlaceholder: 'Каждое предложение с новой строки, например:\nЯ иду домой.\nКоторый час?\nМне нравится этот город.',
+    pairSrcPlaceholder: 'Каждое предложение с новой строки, например:\nЯ иду домой.\nКоторый час?',
+    pairTgtPlaceholder: 'Перевод для каждой строки выше, в том же порядке, например:\nI am going home.\nWhat time is it?',
+    noDataMsg: 'Нет предложений. Добавь их во вкладке "Редактировать".'
+  },
+  'en-ru': {
+    titleEmoji: '🇬🇧 → 🇷🇺',
+    srcName: 'английском', tgtName: 'русском',
+    srcLangCode: 'en', tgtLangCode: 'ru',
+    recogLang: 'ru-RU', synthLang: 'ru-RU',
+    bulkPlaceholder: 'Каждое предложение с новой строки, например:\nI am going home.\nWhat time is it?\nI like this city.',
+    pairSrcPlaceholder: 'Каждое предложение с новой строки, например:\nI am going home.\nWhat time is it?',
+    pairTgtPlaceholder: 'Перевод для каждой строки выше, в том же порядке, например:\nЯ иду домой.\nКоторый час?',
+    noDataMsg: 'Нет предложений. Добавь их во вкладке "Редактировать".'
+  }
+};
+
+function loadPasswordLocal(){
+  try{ return localStorage.getItem(PASSWORD_KEY) || DEFAULT_PASSWORD; }
+  catch(e){ return DEFAULT_PASSWORD; }
+}
+function savePasswordLocal(pass){
+  try{ localStorage.setItem(PASSWORD_KEY, pass); }
+  catch(e){ console.error('Storage unavailable', e); }
+}
+let cachedPassword = loadPasswordLocal();
+async function loadPasswordShared(){
+  if(dbApi){
+    try{
+      const snap = await dbApi.collection('settings').doc('shared').get();
+      if(snap.exists && snap.data() && snap.data().password) return snap.data().password;
+    }catch(e){ console.error('db password read failed', e); }
+  }
+  return loadPasswordLocal();
+}
+async function savePasswordShared(pass){
+  if(dbApi){
+    try{ await dbApi.collection('settings').doc('shared').set({password: pass}); return; }
+    catch(e){ console.error('db password write failed', e); }
+  }
+  savePasswordLocal(pass);
+}
+let manageUnlocked = false;
+
+function loadDirection(){
+  try{
+    const v = localStorage.getItem(DIRECTION_KEY);
+    return (v === 'ru-en' || v === 'en-ru') ? v : 'ru-en';
+  }catch(e){ return 'ru-en'; }
+}
+function saveDirection(dir){
+  try{ localStorage.setItem(DIRECTION_KEY, dir); }
+  catch(e){ console.error('Storage unavailable', e); }
+}
+let direction = loadDirection();
+
+function loadCustomLocal(dir){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEYS[dir]);
+    return raw ? JSON.parse(raw) : [];
+  }catch(e){ return []; }
+}
+function saveCustomLocal(dir, list){
+  try{ localStorage.setItem(STORAGE_KEYS[dir], JSON.stringify(list)); }
+  catch(e){ console.error('Storage unavailable', e); }
+}
+
+let dbApi = null;
+let sentencesUnsub = null;
+let custom = [];
+let data = builtIn.concat(custom);
+
+function subscribeSentences(dir){
+  if(sentencesUnsub){ sentencesUnsub(); sentencesUnsub = null; }
+  if(!dbApi){
+    custom = loadCustomLocal(dir);
+    data = builtIn.concat(custom);
+    renderCustomList();
+    return;
+  }
+  sentencesUnsub = dbApi.collection('sentences').where('direction','==',dir).onSnapshot((snap)=>{
+    custom = snap.docs.map(d=>({ _id: d.id, ru: d.data().ru, en: d.data().en }));
+    data = builtIn.concat(custom);
+    renderCustomList();
+  }, (err)=>{ console.error('db sentences error', err); });
+}
+
+async function addSentence(ru, en){
+  if(dbApi){
+    try{ await dbApi.collection('sentences').add({direction, ru, en}); return; }
+    catch(e){ console.error('db add failed', e); alert('Не удалось сохранить в общей базе: ' + e.message + '\nСохранено только в этом браузере.'); }
+  }
+  custom.push({ru, en});
+  saveCustomLocal(direction, custom);
+  data = builtIn.concat(custom);
+  renderCustomList();
+}
+
+async function deleteSentence(item){
+  if(dbApi && item._id){
+    try{ await dbApi.collection('sentences').doc(item._id).delete(); }
+    catch(e){ console.error('db delete failed', e); alert('Не удалось удалить в общей базе: ' + e.message); }
+  } else {
+    const idx = custom.indexOf(item);
+    if(idx >= 0) custom.splice(idx,1);
+    saveCustomLocal(direction, custom);
+    data = builtIn.concat(custom);
+    renderCustomList();
+  }
+  data = builtIn.concat(custom);
+  startSession();
+  loadSentence();
+}
+
+async function deleteAllSentences(){
+  if(custom.length === 0){ alert('Список уже пуст.'); return; }
+  const ok = confirm('Удалить все добавленные предложения (' + custom.length + ' шт.) для текущего направления перевода? Это действие нельзя отменить.');
+  if(!ok) return;
+
+  if(dbApi){
+    const ids = custom.filter(it => it._id).map(it => it._id);
+    try{
+      const batch = dbApi.batch();
+      ids.forEach(id => batch.delete(dbApi.collection('sentences').doc(id)));
+      await batch.commit();
+    }catch(e){
+      console.error('db delete all failed', e);
+      alert('Не удалось удалить все предложения в общей базе: ' + e.message);
+      return;
+    }
+    // onSnapshot сам обновит custom/data/renderCustomList после удаления
+  } else {
+    custom = [];
+    saveCustomLocal(direction, custom);
+    data = builtIn.concat(custom);
+    renderCustomList();
+  }
+  data = builtIn.concat(custom);
+  startSession();
+  loadSentence();
+}
+
+async function updateSentenceEn(item, newEn){
+  if(dbApi && item._id){
+    try{ await dbApi.collection('sentences').doc(item._id).update({en: newEn}); return; }
+    catch(e){ console.error('db update failed', e); alert('Не удалось сохранить в общей базе: ' + e.message + '\nСохранено только в этом браузере.'); }
+  }
+  item.en = newEn;
+  saveCustomLocal(direction, custom);
+  data = builtIn.concat(custom);
+  renderCustomList();
+}
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBQMQBs-YMLJeuh1sZ9slVr8gWfOKxKKig",
+  authDomain: "perevod-app-c0b62.firebaseapp.com",
+  projectId: "perevod-app-c0b62",
+  storageBucket: "perevod-app-c0b62.firebasestorage.app",
+  messagingSenderId: "82711507773",
+  appId: "1:82711507773:web:d490ae48f37b2abbf74b54"
+};
+
+async function initApp(){
+  const statusEl2 = document.getElementById('dbStatus');
+  try{
+    firebase.initializeApp(firebaseConfig);
+    dbApi = firebase.firestore();
+    // force a real request so init errors (blocked domain, wrong config) surface now
+    await dbApi.collection('sentences').limit(1).get();
+    statusEl2.textContent = '✅ Подключено к общей базе (Firestore)';
+    statusEl2.style.color = 'var(--good)';
+  }catch(e){
+    console.error('Firebase init failed', e);
+    dbApi = null;
+    statusEl2.textContent = '⚠️ Firestore недоступен (' + (e && e.message ? e.message : e) + '). Правки сохраняются только в этом браузере.';
+    statusEl2.style.color = 'var(--bad)';
+  }
+  cachedPassword = await loadPasswordShared();
+  subscribeSentences(direction);
+}
+initApp();
+let order = [];      // data indices for the current session (max 10)
+let pos = 0;
+let sessionResults = []; // {correct: bool|null, said: string|null, attempts: number} per session item
+let maxAttempts = 3;     // Infinity means unlimited
+let attemptsUsed = 0;    // attempts used on the current question
+const SESSION_SIZE = 10;
+
+function startSession(){
+  const n = Math.min(SESSION_SIZE, data.length);
+  const all = [...Array(data.length).keys()];
+  for(let i=all.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[all[i],all[j]]=[all[j],all[i]];}
+  order = all.slice(0, n);
+  pos = 0;
+  sessionResults = order.map(()=>({correct:null, said:null, attempts:0}));
+  document.getElementById('practiceContent').style.display = '';
+  document.getElementById('summaryContent').style.display = 'none';
+}
+
+const ruText = document.getElementById('ruText');
+const micBtn = document.getElementById('micBtn');
+const statusEl = document.getElementById('status');
+const heard = document.getElementById('heard');
+const feedback = document.getElementById('feedback');
+const feedbackText = document.getElementById('feedbackText');
+const correctAnswer = document.getElementById('correctAnswer');
+const progress = document.getElementById('progress');
+const nextBtnEl = document.getElementById('nextBtn');
+
+function normalize(s){
+  return s.toLowerCase().replace(/[.,!?;:'"«»\-]/g,'').replace(/\s+/g,' ').trim();
+}
+function levenshtein(a,b){
+  const m=a.length,n=b.length;
+  const dp=Array.from({length:m+1},()=>new Array(n+1).fill(0));
+  for(let i=0;i<=m;i++)dp[i][0]=i;
+  for(let j=0;j<=n;j++)dp[0][j]=j;
+  for(let i=1;i<=m;i++)for(let j=1;j<=n;j++){
+    dp[i][j]=a[i-1]===b[j-1]?dp[i-1][j-1]:1+Math.min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1]);
+  }
+  return dp[m][n];
+}
+function isCloseEnough(said, correct){
+  const a=normalize(said), b=normalize(correct);
+  if(a===b) return true;
+  const dist=levenshtein(a,b);
+  return dist <= Math.max(2, Math.round(b.length*0.15));
+}
+function matchesAny(said, variants){
+  return variants.some(v => isCloseEnough(said, v));
+}
+
+const attemptsInfo = document.getElementById('attemptsInfo');
+const replayBtnEl = document.getElementById('replayBtn');
+
+function updateAttemptsInfo(){
+  if(maxAttempts === Infinity){
+    attemptsInfo.textContent = '';
+  } else {
+    const left = maxAttempts - attemptsUsed;
+    attemptsInfo.textContent = `Осталось попыток: ${left} из ${maxAttempts}`;
+  }
+}
+
+function updateReplayButtonState(){
+  const allowed = (maxAttempts === Infinity) || (attemptsUsed >= maxAttempts);
+  replayBtnEl.disabled = !allowed;
+}
+
+function loadSentence(){
+  if(data.length === 0){
+    ruText.textContent = LANG_INFO[direction].noDataMsg;
+    micBtn.disabled = true;
+    progress.textContent = '';
+    return;
+  }
+  micBtn.disabled = false;
+  attemptsUsed = 0;
+  updateAttemptsInfo();
+  updateReplayButtonState();
+  const item = data[order[pos]];
+  ruText.textContent = item.ru;
+  heard.className = 'heard';
+  feedback.className = 'feedback';
+  statusEl.textContent = 'Нажми на микрофон и произнеси перевод';
+  progress.textContent = `${pos+1} / ${order.length}`;
+  nextBtnEl.textContent = (pos === order.length - 1) ? 'Завершить тест ✓' : 'Следующее →';
+}
+
+function speakTranslation(text){
+  try{
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = LANG_INFO[direction].synthLang;
+    utter.rate = 0.95;
+    window.speechSynthesis.speak(utter);
+  }catch(e){ console.error('Speech synthesis unavailable', e); }
+}
+
+const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let listening = false;
+
+if(!SpeechRecognitionAPI){
+  micBtn.disabled = true;
+  statusEl.innerHTML = '<span class="unsupported">Этот браузер не поддерживает распознавание речи. Попробуй Chrome.</span>';
+} else {
+  recognition = new SpeechRecognitionAPI();
+  recognition.lang = LANG_INFO[direction].recogLang;
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = ()=>{
+    listening = true;
+    micBtn.classList.add('listening');
+    statusEl.textContent = 'Слушаю... говори перевод';
+  };
+  recognition.onresult = (event)=>{
+    const said = event.results[0][0].transcript;
+    const item = data[order[pos]];
+    const variants = item.en.filter(Boolean);
+    heard.className = 'heard show';
+    heard.textContent = 'Услышано: "' + said + '"';
+
+    attemptsUsed++;
+    const ok = matchesAny(said, variants);
+
+    if(ok){
+      sessionResults[pos] = { correct: true, said: said, attempts: attemptsUsed };
+      feedback.className = 'feedback show good';
+      feedbackText.textContent = attemptsUsed === 1 ? '✅ Верно с первой попытки!' : `✅ Верно (попытка ${attemptsUsed})!`;
+      correctAnswer.textContent = 'Правильн' + (variants.length>1?'ые варианты':'ый перевод') + ':\n' + (variants.join('\n') || '(перевод не указан)');
+      micBtn.disabled = true;
+      updateAttemptsInfo();
+      updateReplayButtonState();
+      return;
+    }
+
+    const exhausted = maxAttempts !== Infinity && attemptsUsed >= maxAttempts;
+    if(exhausted){
+      sessionResults[pos] = { correct: false, said: said, attempts: attemptsUsed };
+      feedback.className = 'feedback show bad';
+      feedbackText.textContent = '❌ Попытки закончились.';
+      correctAnswer.textContent = 'Правильн' + (variants.length>1?'ые варианты':'ый перевод') + ':\n' + (variants.join('\n') || '(перевод не указан)');
+      micBtn.disabled = true;
+    } else {
+      feedback.className = 'feedback show bad';
+      feedbackText.textContent = '❌ Не совсем так, попробуй ещё раз.';
+      correctAnswer.textContent = '';
+    }
+    updateAttemptsInfo();
+    updateReplayButtonState();
+  };
+  recognition.onerror = (event)=>{
+    statusEl.textContent = 'Ошибка распознавания: ' + event.error + '. Попробуй ещё раз.';
+  };
+  recognition.onend = ()=>{
+    listening = false;
+    micBtn.classList.remove('listening');
+    if(statusEl.textContent === 'Слушаю... говори перевод'){
+      statusEl.textContent = 'Нажми на микрофон и произнеси перевод';
+    }
+  };
+  micBtn.addEventListener('click', ()=>{
+    if(data.length === 0) return;
+    if(listening){ recognition.stop(); return; }
+    heard.className = 'heard';
+    feedback.className = 'feedback';
+    recognition.lang = LANG_INFO[direction].recogLang;
+    try{ recognition.start(); }
+    catch(e){ statusEl.textContent = 'Не удалось запустить микрофон.'; }
+  });
+}
+
+document.getElementById('replayBtn').addEventListener('click', ()=>{
+  if(data.length === 0) return;
+  const first = data[order[pos]].en.find(Boolean);
+  if(!first){ alert('Для этого предложения ещё нет перевода — добавь его во вкладке "Редактировать".'); return; }
+  speakTranslation(first);
+});
+document.getElementById('nextBtn').addEventListener('click', ()=>{
+  if(data.length === 0) return;
+  if(pos >= order.length - 1){
+    showSummary();
+    return;
+  }
+  pos = pos + 1;
+  loadSentence();
+});
+
+function showSummary(){
+  document.getElementById('practiceContent').style.display = 'none';
+  const summaryContent = document.getElementById('summaryContent');
+  summaryContent.style.display = '';
+  const correctCount = sessionResults.filter(r => r.correct === true).length;
+  document.getElementById('summaryScore').textContent = `Результат: ${correctCount} из ${order.length} ✅`;
+  const list = document.getElementById('summaryList');
+  list.innerHTML = '';
+  order.forEach((dataIdx, i)=>{
+    const item = data[dataIdx];
+    const res = sessionResults[i];
+    const row = document.createElement('div');
+    row.className = 'summary-row';
+    const icon = document.createElement('div');
+    icon.className = 'sr-icon';
+    icon.textContent = res.correct === true ? '✅' : (res.correct === false ? '❌' : '⏭️');
+    const body = document.createElement('div');
+    body.className = 'sr-body';
+    const ru = document.createElement('div');
+    ru.className = 'sr-ru';
+    ru.textContent = item.ru;
+    const detail = document.createElement('div');
+    detail.className = 'sr-detail';
+    const variants = item.en.filter(Boolean);
+    if(res.correct === true){
+      detail.textContent = `Ты сказал: "${res.said}" · верно с попытки ${res.attempts} · правильный вариант: ${variants.join(' / ') || '—'}`;
+    } else if(res.correct === false){
+      detail.textContent = `Не удалось за ${res.attempts} попыт(ок) · последний ответ: "${res.said}" · правильно: ${variants.join(' / ') || '—'}`;
+    } else {
+      detail.textContent = `Пропущено · правильно: ${variants.join(' / ') || '—'}`;
+    }
+    body.appendChild(ru);
+    body.appendChild(detail);
+    row.appendChild(icon);
+    row.appendChild(body);
+    list.appendChild(row);
+  });
+}
+
+document.getElementById('startBtn').addEventListener('click', ()=>{
+  const val = document.getElementById('attemptsSelect').value;
+  maxAttempts = (val === '0') ? Infinity : parseInt(val, 10);
+  startSession();
+  loadSentence();
+});
+
+document.getElementById('restartBtn').addEventListener('click', ()=>{
+  document.getElementById('startBtn').click();
+});
+
+// --- Tabs ---
+const tabPractice = document.getElementById('tabPractice');
+const tabManage = document.getElementById('tabManage');
+const viewPractice = document.getElementById('viewPractice');
+const viewManage = document.getElementById('viewManage');
+
+function applyDirectionLabels(){
+  const li = LANG_INFO[direction];
+  document.getElementById('appTitle').textContent = li.titleEmoji + ' Скажи перевод';
+  document.getElementById('appSub').textContent = `Прочитай предложение и произнеси его перевод на ${li.tgtName} вслух`;
+  document.getElementById('promptLabel').textContent = `Предложение на ${li.srcName}:`;
+  document.getElementById('bulkHint').textContent = `Перевод на ${li.tgtName} подберётся автоматически — потом его можно проверить и дополнить вариантами.`;
+  document.getElementById('bulkRu').placeholder = li.bulkPlaceholder;
+  document.getElementById('pairSrcLabel').textContent = `Предложения на ${li.srcName} (по одному в строке)`;
+  document.getElementById('pairTgtLabel').textContent = `Перевод на ${li.tgtName} (по одному в строке, в том же порядке)`;
+  document.getElementById('pairSrc').placeholder = li.pairSrcPlaceholder;
+  document.getElementById('pairTgt').placeholder = li.pairTgtPlaceholder;
+}
+
+const directionSelect = document.getElementById('directionSelect');
+directionSelect.value = direction;
+applyDirectionLabels();
+
+directionSelect.addEventListener('change', ()=>{
+  direction = directionSelect.value;
+  saveDirection(direction);
+  subscribeSentences(direction);
+  applyDirectionLabels();
+  document.getElementById('practiceContent').style.display = 'none';
+  document.getElementById('summaryContent').style.display = 'none';
+  if(recognition) recognition.lang = LANG_INFO[direction].recogLang;
+});
+
+tabPractice.addEventListener('click', ()=>{
+  tabPractice.classList.add('active'); tabManage.classList.remove('active');
+  viewPractice.classList.add('active'); viewManage.classList.remove('active');
+  manageUnlocked = false;
+});
+tabManage.addEventListener('click', ()=>{
+  tabManage.classList.add('active'); tabPractice.classList.remove('active');
+  viewManage.classList.add('active'); viewPractice.classList.remove('active');
+  showManageGateOrContent();
+});
+
+const managePasswordGate = document.getElementById('managePasswordGate');
+const manageContent = document.getElementById('manageContent');
+const managePasswordInput = document.getElementById('managePasswordInput');
+const managePasswordError = document.getElementById('managePasswordError');
+
+function showManageGateOrContent(){
+  if(manageUnlocked){
+    managePasswordGate.style.display = 'none';
+    manageContent.style.display = '';
+    renderCustomList();
+  } else {
+    managePasswordGate.style.display = '';
+    manageContent.style.display = 'none';
+    managePasswordError.style.display = 'none';
+    managePasswordInput.value = '';
+    managePasswordInput.focus();
+  }
+}
+
+function tryUnlock(){
+  const entered = managePasswordInput.value;
+  if(entered === cachedPassword){
+    manageUnlocked = true;
+    showManageGateOrContent();
+  } else {
+    managePasswordError.style.display = '';
+    managePasswordInput.value = '';
+    managePasswordInput.focus();
+  }
+}
+document.getElementById('managePasswordSubmit').addEventListener('click', tryUnlock);
+managePasswordInput.addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter'){ e.preventDefault(); tryUnlock(); }
+});
+
+document.getElementById('changePassBtn').addEventListener('click', async ()=>{
+  const oldInput = document.getElementById('changePassOld');
+  const newInput = document.getElementById('changePassNew');
+  const status = document.getElementById('changePassStatus');
+  const oldVal = oldInput.value;
+  const newVal = newInput.value.trim();
+  if(oldVal !== cachedPassword){
+    status.style.color = 'var(--bad)';
+    status.textContent = 'Текущий пароль указан неверно.';
+    return;
+  }
+  if(!newVal){
+    status.style.color = 'var(--bad)';
+    status.textContent = 'Введи новый пароль.';
+    return;
+  }
+  await savePasswordShared(newVal);
+  cachedPassword = newVal;
+  oldInput.value = '';
+  newInput.value = '';
+  status.style.color = 'var(--good)';
+  status.textContent = 'Пароль изменён.';
+});
+
+// --- Manage view ---
+const customList = document.getElementById('customList');
+document.getElementById('deleteAllBtn').addEventListener('click', deleteAllSentences);
+
+function renderCustomList(){
+  customList.innerHTML = '';
+  if(custom.length === 0){
+    customList.innerHTML = '<div class="empty-note">Пока ничего не добавлено.</div>';
+    return;
+  }
+  custom.forEach((item, idx)=>{
+    const div = document.createElement('div');
+    div.className = 'list-item';
+
+    const head = document.createElement('div');
+    head.className = 'ru-part';
+    const ruSpan = document.createElement('span');
+    ruSpan.textContent = item.ru;
+    const del = document.createElement('button');
+    del.className = 'del-btn';
+    del.textContent = '🗑';
+    del.title = 'Удалить всё предложение';
+    del.addEventListener('click', ()=>{
+      deleteSentence(item);
+    });
+    head.appendChild(ruSpan);
+    head.appendChild(del);
+    div.appendChild(head);
+
+    const chipsWrap = document.createElement('div');
+    item.en.forEach((variant, vIdx)=>{
+      const chip = document.createElement('span');
+      chip.className = 'variant-chip';
+
+      const chipText = document.createElement('span');
+      chipText.textContent = variant || '(пусто)';
+      chipText.title = 'Нажми, чтобы отредактировать';
+      chipText.style.cursor = 'pointer';
+      chipText.addEventListener('click', ()=>{
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = variant;
+        input.style.cssText = 'border:1px solid var(--accent); border-radius:6px; padding:2px 6px; font-size:12px; width:150px; max-width:40vw;';
+        chip.replaceChild(input, chipText);
+        input.focus();
+        input.select();
+
+        function commit(){
+          const v = input.value.trim();
+          if(v){
+            const newEn = item.en.slice();
+            newEn[vIdx] = v;
+            updateSentenceEn(item, newEn);
+          } else {
+            renderCustomList();
+          }
+        }
+        input.addEventListener('keydown', (e)=>{
+          if(e.key === 'Enter'){ e.preventDefault(); commit(); }
+          if(e.key === 'Escape'){ e.preventDefault(); renderCustomList(); }
+        });
+        input.addEventListener('blur', commit);
+      });
+      chip.appendChild(chipText);
+
+      const chipDel = document.createElement('button');
+      chipDel.textContent = '✕';
+      chipDel.title = 'Удалить этот вариант';
+      chipDel.addEventListener('click', ()=>{
+        if(item.en.length <= 1){
+          alert('У предложения должен остаться хотя бы один вариант перевода. Чтобы убрать всё, удали предложение целиком (значок 🗑).');
+          return;
+        }
+        const newEn = item.en.slice();
+        newEn.splice(vIdx,1);
+        updateSentenceEn(item, newEn);
+      });
+      chip.appendChild(chipDel);
+      chipsWrap.appendChild(chip);
+    });
+    div.appendChild(chipsWrap);
+
+    const addRow = document.createElement('div');
+    addRow.className = 'add-variant-row';
+    const addInput = document.createElement('input');
+    addInput.type = 'text';
+    addInput.placeholder = 'Добавить ещё один вариант перевода';
+    const addBtnSmall = document.createElement('button');
+    addBtnSmall.textContent = '+';
+    addBtnSmall.addEventListener('click', ()=>{
+      const v = addInput.value.trim();
+      if(!v) return;
+      updateSentenceEn(item, item.en.concat([v]));
+    });
+    addInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); addBtnSmall.click(); } });
+    addRow.appendChild(addInput);
+    addRow.appendChild(addBtnSmall);
+    div.appendChild(addRow);
+
+    customList.appendChild(div);
+  });
+}
+
+async function translateText(text, dir){
+  const li = LANG_INFO[dir];
+  const url = 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(text) + '&langpair=' + li.srcLangCode + '|' + li.tgtLangCode;
+  const res = await fetch(url);
+  if(!res.ok) throw new Error('translate request failed');
+  const json = await res.json();
+  const translated = json && json.responseData && json.responseData.translatedText;
+  if(!translated) throw new Error('no translation in response');
+  return translated;
+}
+
+const bulkRu = document.getElementById('bulkRu');
+const bulkStatus = document.getElementById('bulkStatus');
+document.getElementById('bulkAddBtn').addEventListener('click', async ()=>{
+  const lines = bulkRu.value.split('\n').map(s=>s.trim()).filter(Boolean).slice(0,10);
+  if(lines.length === 0){
+    alert('Введи хотя бы одно предложение.');
+    return;
+  }
+  const btn = document.getElementById('bulkAddBtn');
+  btn.disabled = true;
+  let added = 0, failed = 0;
+  for(let i=0;i<lines.length;i++){
+    bulkStatus.textContent = `Перевожу ${i+1} из ${lines.length}...`;
+    try{
+      const translated = await translateText(lines[i], direction);
+      await addSentence(lines[i], [translated]);
+      added++;
+    }catch(e){
+      console.error('Translation failed for:', lines[i], e);
+      await addSentence(lines[i], ['']);
+      failed++;
+    }
+    if(i < lines.length - 1) await new Promise(r=>setTimeout(r, 350));
+  }
+  startSession();
+  loadSentence();
+  bulkRu.value = '';
+  btn.disabled = false;
+  bulkStatus.textContent = failed === 0
+    ? `Готово: добавлено ${added} предложений.`
+    : `Добавлено ${added}, для ${failed} не удалось получить перевод — впиши его вручную через "+" у предложения (проверь интернет-соединение).`;
+});
+
+document.getElementById('pairAddBtn').addEventListener('click', ()=>{
+  const pairSrc = document.getElementById('pairSrc');
+  const pairTgt = document.getElementById('pairTgt');
+  const status = document.getElementById('pairAddStatus');
+  const srcLines = pairSrc.value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const tgtLines = pairTgt.value.split('\n').map(s=>s.trim()).filter(Boolean);
+
+  if(srcLines.length === 0 || tgtLines.length === 0){
+    status.style.color = 'var(--bad)';
+    status.textContent = 'Заполни оба поля: предложения и их переводы.';
+    return;
+  }
+  if(srcLines.length !== tgtLines.length){
+    status.style.color = 'var(--bad)';
+    status.textContent = `Количество строк не совпадает: предложений — ${srcLines.length}, переводов — ${tgtLines.length}. Проверь, чтобы каждому предложению соответствовала одна строка перевода.`;
+    return;
+  }
+
+  (async ()=>{
+    for(let i=0;i<srcLines.length;i++){
+      await addSentence(srcLines[i], [tgtLines[i]]);
+    }
+    startSession();
+    loadSentence();
+    pairSrc.value = '';
+    pairTgt.value = '';
+    status.style.color = 'var(--good)';
+    status.textContent = `Добавлено предложений: ${srcLines.length}.`;
+  })();
+});
+
+renderCustomList();
+</script>
+</body>
+</html>
